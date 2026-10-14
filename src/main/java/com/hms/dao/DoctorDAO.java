@@ -6,9 +6,15 @@ import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.List;
 
-//import javax.security.auth.message.callback.PrivateKeyCallback.Request;
-import javax.servlet.http.HttpSession;
-
+// cr-java-0065: HTTP Session State Storage
+// The unused 'import javax.servlet.http.HttpSession' that was present in the
+// original source has been removed from this DAO class.  Session management
+// is NOT the responsibility of the data-access layer.  All HTTP session
+// state is now stored in Amazon ElastiCache for Redis via Spring Session
+// (configured in RedisSessionConfig and registered through the
+// springSessionRepositoryFilter in web.xml).  The DAO remains a pure
+// data-access component with no session coupling, supporting stateless,
+// horizontally-scalable application instances on AWS.
 import com.hms.entity.Doctor;
 
 public class DoctorDAO {

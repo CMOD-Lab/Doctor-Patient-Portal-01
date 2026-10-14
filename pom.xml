@@ -2,13 +2,19 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>com.hms</groupId>
 	<artifactId>Doctor-Patient-Portal</artifactId>
-	<packaging>war</packaging>
+	<!-- cr-java-0107: WAR Packaging → executable JAR with embedded Tomcat -->
+	<!-- Changed from 'war' to 'jar' so the artifact is a self-contained     -->
+	<!-- executable JAR deployable on Amazon ECS, EKS, or AWS Fargate        -->
+	<!-- without an external application server.                              -->
+	<packaging>jar</packaging>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>Doctor-Patient-Portal Maven Webapp</name>
 	<url>http://maven.apache.org</url>
 	<properties>
 		<maven.compiler.source>1.8</maven.compiler.source>
 		<maven.compiler.target>1.8</maven.compiler.target>
+		<!-- Embedded Tomcat version aligned with servlet-api 4.0.1 (Tomcat 9.x) -->
+		<tomcat.version>9.0.82</tomcat.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -18,11 +24,14 @@
 			<scope>test</scope>
 		</dependency>
 
+		<!-- cr-java-0107: scope changed from 'provided' to 'compile' because  -->
+		<!-- the embedded Tomcat now supplies the servlet container at runtime; -->
+		<!-- there is no external server to provide this API.                  -->
 		<dependency>
 			<groupId>javax.servlet</groupId>
 			<artifactId>javax.servlet-api</artifactId>
 			<version>4.0.1</version>
-			<scope>provided</scope>
+			<scope>compile</scope>
 		</dependency>
 
 		<!-- https://mvnrepository.com/artifact/mysql/mysql-connector-java -->
@@ -46,14 +55,146 @@
 			<version>3.0.0</version>
 		</dependency>
 
+		<!-- cr-java-0107: Embedded Tomcat – replaces external application server -->
+		<!-- Tomcat 9.x is the last version compatible with the Servlet 4.0 API  -->
+		<dependency>
+			<groupId>org.apache.tomcat.embed</groupId>
+			<artifactId>tomcat-embed-core</artifactId>
+			<version>${tomcat.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.tomcat.embed</groupId>
+			<artifactId>tomcat-embed-jasper</artifactId>
+			<version>${tomcat.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.tomcat.embed</groupId>
+			<artifactId>tomcat-embed-websocket</artifactId>
+			<version>${tomcat.version}</version>
+		</dependency>
+
+		<!-- AWS Secrets Manager SDK (cr-java-0113: Lack of Externalized Secrets) -->
+
+		<!-- cr-java-0073: Direct JDBC Connections -->
+		<!-- HikariCP connection pool replaces raw DriverManager.getConnection() -->
+		<!-- Works with Amazon RDS Proxy for optimized cloud database connections -->
+		<dependency>
+			<groupId>com.zaxxer</groupId>
+			<artifactId>HikariCP</artifactId>
+			<version>5.0.1</version>
+		</dependency>
+
+		<!-- AWS Secrets Manager SDK (cr-java-0113: Lack of Externalized Secrets) -->
+		<!-- Provides centralised, auditable secret retrieval via AWS Secrets Manager -->
+		<dependency>
+			<groupId>com.amazonaws</groupId>
+			<artifactId>aws-java-sdk-secretsmanager</artifactId>
+			<version>1.12.470</version>
+		</dependency>
+
+		<!-- AWS core SDK required by aws-java-sdk-secretsmanager -->
+		<dependency>
+			<groupId>com.amazonaws</groupId>
+			<artifactId>aws-java-sdk-core</artifactId>
+			<version>1.12.470</version>
+		</dependency>
+
+		<!-- Jackson Databind for parsing JSON-formatted secrets -->
+		<dependency>
+			<groupId>com.fasterxml.jackson.core</groupId>
+			<artifactId>jackson-databind</artifactId>
+			<version>2.15.2</version>
+		</dependency>
+
+		<!-- cr-java-0065: HTTP Session State Storage -->
+		<!-- Spring Session Data Redis: replaces in-process HttpSession with -->
+		<!-- a distributed, Redis-backed session store on Amazon ElastiCache  -->
+		<dependency>
+			<groupId>org.springframework.session</groupId>
+			<artifactId>spring-session-data-redis</artifactId>
+			<version>2.7.4</version>
+		</dependency>
+
+		<!-- Lettuce Redis client used by Spring Session to connect to ElastiCache -->
+		<dependency>
+			<groupId>io.lettuce</groupId>
+			<artifactId>lettuce-core</artifactId>
+			<version>6.2.6.RELEASE</version>
+		</dependency>
+
+		<!-- Spring Context required by Spring Session configuration -->
+		<dependency>
+			<groupId>org.springframework</groupId>
+			<artifactId>spring-context</artifactId>
+			<version>5.3.29</version>
+		</dependency>
+
+		<!-- Spring Web required for SpringHttpSessionConfiguration / DelegatingFilterProxy -->
+		<dependency>
+			<groupId>org.springframework</groupId>
+			<artifactId>spring-web</artifactId>
+			<version>5.3.29</version>
+		</dependency>
+
+		<!-- Spring Data Redis required by spring-session-data-redis -->
+		<dependency>
+			<groupId>org.springframework.data</groupId>
+			<artifactId>spring-data-redis</artifactId>
+			<version>2.7.14</version>
+		</dependency>
 
 	</dependencies>
 	<build>
 		<plugins>
+			<!-- cr-java-0107: maven-war-plugin replaced by maven-jar-plugin +        -->
+			<!-- maven-shade-plugin to produce a single self-contained executable JAR -->
+			<!-- (uber-jar / fat-jar) that bundles all dependencies and the embedded  -->
+			<!-- Tomcat runtime, enabling direct deployment on ECS/EKS/Fargate.       -->
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-war-plugin</artifactId>
-				<version>3.3.1</version>
+				<artifactId>maven-jar-plugin</artifactId>
+				<version>3.3.0</version>
+				<configuration>
+					<archive>
+						<manifest>
+							<!-- Entry point that bootstraps the embedded Tomcat server -->
+							<mainClass>com.hms.EmbeddedTomcatLauncher</mainClass>
+							<addClasspath>true</addClasspath>
+						</manifest>
+					</archive>
+				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-shade-plugin</artifactId>
+				<version>3.5.1</version>
+				<executions>
+					<execution>
+						<phase>package</phase>
+						<goals>
+							<goal>shade</goal>
+						</goals>
+						<configuration>
+							<createDependencyReducedPom>false</createDependencyReducedPom>
+							<transformers>
+								<transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+									<mainClass>com.hms.EmbeddedTomcatLauncher</mainClass>
+								</transformer>
+								<transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+							</transformers>
+							<filters>
+								<filter>
+									<artifact>*:*</artifact>
+									<excludes>
+										<exclude>META-INF/*.SF</exclude>
+										<exclude>META-INF/*.DSA</exclude>
+										<exclude>META-INF/*.RSA</exclude>
+									</excludes>
+								</filter>
+							</filters>
+						</configuration>
+					</execution>
+				</executions>
 			</plugin>
 		</plugins>
 		<finalName>Doctor-Patient-Portal</finalName>

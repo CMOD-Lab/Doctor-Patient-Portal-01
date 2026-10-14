@@ -1,27 +1,76 @@
-<!DOCTYPE web-app PUBLIC
- "-//Sun Microsystems, Inc.//DTD Web Application 2.3//EN"
- "http://java.sun.com/dtd/web-app_2_3.dtd" >
+<?xml version="1.0" encoding="UTF-8"?>
+<web-app xmlns="http://xmlns.jcp.org/xml/ns/javaee"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/javaee
+                             http://xmlns.jcp.org/xml/ns/javaee/web-app_3_1.xsd"
+         version="3.1">
 
-<web-app>
   <display-name>Archetype Created Web Application</display-name>
+
+  <!--
+    cr-java-0065: HTTP Session State Storage
+    =========================================
+    Bootstrap the Spring application context so that RedisSessionConfig
+    (annotated with @EnableRedisHttpSession) is loaded on startup.
+    This registers the SessionRepositoryFilter bean that transparently
+    replaces the in-process HttpSession with an Amazon ElastiCache for
+    Redis-backed session, enabling stateless, horizontally-scalable instances.
+  -->
+  <context-param>
+    <param-name>contextClass</param-name>
+    <param-value>org.springframework.web.context.support.AnnotationConfigWebApplicationContext</param-value>
+  </context-param>
+  <context-param>
+    <param-name>contextConfigLocation</param-name>
+    <param-value>com.hms.config.RedisSessionConfig</param-value>
+  </context-param>
+
+  <listener>
+    <listener-class>org.springframework.web.context.ContextLoaderListener</listener-class>
+  </listener>
+
+  <!--
+    cr-java-0065: Spring Session Repository Filter
+    ================================================
+    DelegatingFilterProxy delegates to the 'springSessionRepositoryFilter'
+    bean registered by @EnableRedisHttpSession.  It MUST be declared before
+    any other filter or servlet that uses HttpSession so that every call to
+    request.getSession() returns the Redis-backed session object.
+    The dispatcher type ASYNC is included so that async servlets also use
+    the distributed session.
+  -->
+  <filter>
+    <filter-name>springSessionRepositoryFilter</filter-name>
+    <filter-class>org.springframework.web.filter.DelegatingFilterProxy</filter-class>
+    <async-supported>true</async-supported>
+  </filter>
+  <filter-mapping>
+    <filter-name>springSessionRepositoryFilter</filter-name>
+    <url-pattern>/*</url-pattern>
+    <dispatcher>REQUEST</dispatcher>
+    <dispatcher>ERROR</dispatcher>
+    <dispatcher>ASYNC</dispatcher>
+  </filter-mapping>
+
   <servlet>
-  	<servlet-name>myuserServlet</servlet-name>
-  	<display-name>myuserServlet</display-name>
-  	<description></description>
-  	<servlet-class>com.hms.user.servlet.myuserServlet</servlet-class>
+    <servlet-name>myuserServlet</servlet-name>
+    <display-name>myuserServlet</display-name>
+    <description></description>
+    <servlet-class>com.hms.user.servlet.myuserServlet</servlet-class>
   </servlet>
   <servlet>
-  	<servlet-name>MyNewServlet</servlet-name>
-  	<display-name>MyNewServlet</display-name>
-  	<description></description>
-  	<servlet-class>com.hms.user.servlet.MyNewServlet</servlet-class>
+    <servlet-name>MyNewServlet</servlet-name>
+    <display-name>MyNewServlet</display-name>
+    <description></description>
+    <servlet-class>com.hms.user.servlet.MyNewServlet</servlet-class>
   </servlet>
   <servlet-mapping>
-  	<servlet-name>myuserServlet</servlet-name>
-  	<url-pattern>/myuserServlet</url-pattern>
+    <servlet-name>myuserServlet</servlet-name>
+    <url-pattern>/myuserServlet</url-pattern>
   </servlet-mapping>
   <servlet-mapping>
-  	<servlet-name>MyNewServlet</servlet-name>
-  	<url-pattern>/MyNewServletRegisterUser</url-pattern>
+    <servlet-name>MyNewServlet</servlet-name>
+    <url-pattern>/MyNewServletRegisterUser</url-pattern>
   </servlet-mapping>
+
 </web-app>
